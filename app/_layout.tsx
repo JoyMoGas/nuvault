@@ -5,18 +5,76 @@ import React, { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getUserData } from '../services/userService';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Linking } from 'react-native'; // ✅ Solo agregué Linking aquí
 
 const MainLayout = () => {
   const { setAuth, user } = useAuth(); // 👈 Agregamos user para debugging
   const router = useRouter();
 
+  // ✅ NUEVO: Función para manejar deep links (sin hook separado)
+  const handleDeepLink = (url: string) => {
+    console.log('🔗 Deep link recibido:', url);
+
+    try {
+      const urlObj = new URL(url);
+      const path = urlObj.pathname;
+      const searchParams = urlObj.searchParams;
+
+      // Manejar reset password
+      if (path === '/reset-password') {
+        const token = searchParams.get('token');
+        const refreshToken = searchParams.get('refresh_token');
+        
+        if (token) {
+          console.log('🔐 Navegando a reset password con token');
+          router.push(`/resetPassword?token=${token}${refreshToken ? `&refresh_token=${refreshToken}` : ''}`);
+        }
+        return;
+      }
+
+      // Manejar otras rutas si necesitas
+      switch (path) {
+        case '/login':
+          router.push('/login');
+          break;
+        case '/signup':
+          router.push('/signUp');
+          break;
+        case '/forgot-password':
+          router.push('/forgotPassword');
+          break;
+        default:
+          console.log('🔗 Ruta no reconocida:', path);
+      }
+    } catch (error) {
+      console.error('❌ Error procesando deep link:', error);
+    }
+  };
+
   useEffect(() => {
     console.log("🔄 Layout: Estado actual del usuario:", user?.email || "No user");
-    
+
+    // ✅ NUEVO: Configurar deep linking
+    const setupDeepLinking = async () => {
+      // Manejar deep links cuando la app está cerrada
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl);
+      }
+
+      // Manejar deep links cuando la app está abierta
+      const subscription = Linking.addEventListener('url', (event) => {
+        handleDeepLink(event.url);
+      });
+
+      return subscription;
+    };
+
+    const deepLinkSubscription = setupDeepLinking();
+   
     const handleAuthChange = async (event, session) => {
       console.log("🔄 AuthStateChange disparado:", event, session?.user?.email || "No session");
-      
+     
       // ✅ IGNORAR USER_UPDATED para evitar redirección automática
       if (event === 'USER_UPDATED') {
         console.log("⚠️ USER_UPDATED detectado - Solo actualizando datos, NO redirigiendo");
@@ -31,7 +89,7 @@ const MainLayout = () => {
         }
         return; // ✅ NO navegues en USER_UPDATED
       }
-      
+     
       if (session?.user) {
         console.log("✅ Usuario autenticado, obteniendo datos...");
         const res = await getUserData(session.user.id);
@@ -61,11 +119,17 @@ const MainLayout = () => {
     return () => {
       console.log("🧹 Limpiando suscripción de auth");
       subscription.unsubscribe();
+      
+      // ✅ NUEVO: Limpiar suscripción de deep linking
+      deepLinkSubscription.then(sub => sub?.remove());
     };
   }, []); // 👈 Removemos dependencias para evitar loops
 
   return (
-    <Stack screenOptions={{ headerShown: false }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* ✅ NUEVO: Solo agregué esta línea para la nueva pantalla */}
+      <Stack.Screen name="resetPassword" options={{ headerShown: false }} />
+    </Stack>
   );
 }
 

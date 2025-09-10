@@ -29,44 +29,45 @@ const SignUp = () => {
   const navigate = (route: RouteKeys) => router.push(Routes[route]);
 
   const onSubmit = async () => {
-  if (!emailRef.current || !passwordRef.current || !nameRef.current) {
-    Alert.alert('Sign Up', 'Please fill all the fields!');
-    return;
-  }
+    if (!emailRef.current || !passwordRef.current || !nameRef.current) {
+      Alert.alert('Sign Up', 'Please fill all the fields!');
+      return;
+    }
 
-  let username = nameRef.current.trim();
-  let email = emailRef.current.trim();
-  let password = passwordRef.current.trim();
+    let username = nameRef.current.trim();
+    let email = emailRef.current.trim();
+    let password = passwordRef.current.trim();
 
-  setLoading(true);
+    setLoading(true);
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        username,
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+        },
+        // ✅ AGREGADO: URL de redirección para verificación de email
+        emailRedirectTo: 'https://nuvaultapp.netlify.app/email-validation',
       },
-    },
-  });
+    });
 
-  setLoading(false);
+    setLoading(false);
 
-  if (error) {
-    Alert.alert('Sign Up', error.message);
-    return;
-  }
+    if (error) {
+      Alert.alert('Sign Up', error.message);
+      return;
+    }
 
-  if (data.user) {
-    Alert.alert(
-      'Verify your email',
-      'We sent you a confirmation link. Please check your inbox before logging in.'
-    );
-    // Opcional: redirigir a una pantalla "Check your email"
-    navigate('LOGIN');
-  }
-};
-
+    if (data.user) {
+      Alert.alert(
+        'Verify your email',
+        'We sent you a confirmation link. Please check your inbox before logging in.'
+      );
+      // Opcional: redirigir a una pantalla "Check your email"
+      navigate('LOGIN');
+    }
+  };
 
   return (
     <ScreenWrapper bg={theme.colors.dark}>
