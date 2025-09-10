@@ -1,0 +1,16 @@
+# Redireccionamientos específicos para cada tipo de acción
+[[redirects]]
+  from = "/reset-password"
+  to = "/reset-password.html"
+  status = 200
+
+[[redirects]]
+  from = "/email-validation"
+  to = "/email-validation.html"
+  status = 200
+
+# Fallback para otras rutas (opcional)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

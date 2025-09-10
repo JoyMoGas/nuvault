@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuvault - Email Verification</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 90%;
+        }
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            font-size: 1.75rem;
+            color: #1c1e21;
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            font-size: 1.1rem;
+            color: #606770;
+            line-height: 1.5;
+            margin-top: 0;
+        }
+        a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="content">
+        <div class="spinner"></div>
+        <h1>Verificando email...</h1>
+        <p>Procesando tu verificación...</p>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            const contentDiv = document.getElementById('content');
+            
+            // Obtener parámetros del hash de Supabase
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            
+            const type = params.get('type');
+            const accessToken = params.get('access_token');
+            
+            console.log('Email verification page loaded');
+            console.log('Type:', type);
+            console.log('Access Token:', accessToken ? 'presente' : 'ausente');
+            
+            // Verificar si es una verificación de signup válida
+            if (type === 'signup' && accessToken) {
+                // Email verificado exitosamente
+                setTimeout(() => {
+                    contentDiv.innerHTML = `
+                        <div class="icon">✅</div>
+                        <h1>¡Email verificado!</h1>
+                        <p>Tu cuenta ha sido verificada exitosamente.</p>
+                        <p>Ya puedes cerrar esta ventana e iniciar sesión en la aplicación.</p>
+                        <p><a href="nuvault://login">Abrir Nuvault</a></p>
+                    `;
+                }, 1500);
+                
+            } else if (type === 'signup') {
+                // Verificación completada pero sin token (puede ser normal en algunos casos)
+                contentDiv.innerHTML = `
+                    <div class="icon">✅</div>
+                    <h1>¡Email verificado!</h1>
+                    <p>Tu cuenta ha sido verificada exitosamente.</p>
+                    <p>Ya puedes cerrar esta ventana e iniciar sesión en la aplicación.</p>
+                    <p><a href="nuvault://login">Abrir Nuvault</a></p>
+                `;
+                
+            } else {
+                // Enlace inválido o expirado
+                contentDiv.innerHTML = `
+                    <div class="icon">⚠️</div>
+                    <h1>Enlace inválido</h1>
+                    <p>Este enlace de verificación no es válido o ha expirado.</p>
+                    <p>Por favor, solicita un nuevo enlace de verificación desde la aplicación.</p>
+                    <p><a href="nuvault://signup">Crear cuenta</a></p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
