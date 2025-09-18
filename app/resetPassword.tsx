@@ -1,120 +1,99 @@
+// app/resetPassword.tsx
+
 import Icon from '@/assets/icons/icons';
-import BackButton from '@/components/BackButton';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import ScreenWrapper from '@/components/ScreenWrapper';
 import { theme } from '@/constants/theme';
 import { hp, wp } from '@/helpers/common';
 import { supabase } from '@/lib/supabase';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { useAuthStore } from '@/store/authStore'; // ✅ Importamos nuestro almacén
 
 const ResetPassword = () => {
   const router = useRouter();
-  const params = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const [sessionSet, setSessionSet] = useState(false);
+  const [isSessionReady, setSessionReady] = useState(false);
   const passwordRef = useRef('');
   const confirmPasswordRef = useRef('');
 
+  // ✅ Leemos los tokens y la función para limpiarlos desde el almacén
+  const { recoveryToken, recoveryRefreshToken, clearRecoveryTokens } = useAuthStore();
+
   useEffect(() => {
-    const setupSession = async () => {
-      const token = Array.isArray(params.token) ? params.token[0] : params.token;
-      const refreshToken = Array.isArray(params.refresh_token) 
-        ? params.refresh_token[0] 
-        : params.refresh_token;
+    // Este efecto se ejecuta cuando la pantalla se monta
+    const establishSession = async () => {
+      if (recoveryToken && recoveryRefreshToken) {
+        console.log('🔧 Estableciendo sesión desde el almacén global...');
+        const { error } = await supabase.auth.setSession({
+          access_token: recoveryToken,
+          refresh_token: recoveryRefreshToken,
+        });
 
-      if (token) {
-        try {
-          // Establecer la sesión con el token de recovery
-          const { data, error } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: refreshToken || '',
-          });
-
-          if (error) {
-            console.error('Error setting session:', error);
-            Alert.alert('Error', 'Invalid or expired reset link. Please request a new one.');
-            router.push('/forgotPassword');
-            return;
-          }
-
-          if (data.session) {
-            setSessionSet(true);
-            console.log('Session established for password reset');
-          }
-        } catch (error) {
-          console.error('Error in setupSession:', error);
-          Alert.alert('Error', 'Something went wrong. Please try again.');
-          router.push('/login');
+        if (error) {
+          Alert.alert('Error', 'El enlace ha expirado o no es válido.');
+          router.replace('/forgotPassword');
+        } else {
+          console.log('✅ Sesión de recuperación establecida.');
+          setSessionReady(true);
         }
+        // Limpiamos los tokens para que no se puedan reusar
+        clearRecoveryTokens();
       } else {
-        Alert.alert('Error', 'No reset token provided.');
-        router.push('/forgotPassword');
+        // Si llegamos aquí sin tokens, el enlace era inválido o ya fue usado
+        Alert.alert('Error', 'No se encontraron tokens de recuperación. Solicita un nuevo enlace.');
+        router.replace('/forgotPassword');
       }
     };
-
-    setupSession();
-  }, [params]);
+    
+    establishSession();
+  }, []); // Se ejecuta solo una vez
 
   const handleResetPassword = async () => {
     if (!passwordRef.current || !confirmPasswordRef.current) {
-      Alert.alert('Error', 'Please fill in both password fields.');
+      Alert.alert('Error', 'Por favor, llena ambos campos de contraseña.');
       return;
     }
-
     if (passwordRef.current !== confirmPasswordRef.current) {
-      Alert.alert('Error', 'Passwords do not match.');
+      Alert.alert('Error', 'Las contraseñas no coinciden.');
       return;
     }
-
     if (passwordRef.current.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
     setLoading(true);
 
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordRef.current
-      });
+    const { error } = await supabase.auth.updateUser({
+      password: passwordRef.current,
+    });
+    
+    setLoading(false);
 
-      setLoading(false);
-
-      if (error) {
-        Alert.alert('Error', error.message);
-        return;
-      }
-
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
       Alert.alert(
-        'Success', 
-        'Your password has been updated successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // Cerrar sesión y redirigir al login
-              supabase.auth.signOut();
-              router.push('/login');
-            }
-          }
-        ]
+        'Éxito',
+        'Tu contraseña ha sido actualizada exitosamente.',
+        [{ text: 'OK', onPress: () => {
+            supabase.auth.signOut();
+            router.replace('/login');
+          } }]
       );
-    } catch (error) {
-      setLoading(false);
-      console.error('Error updating password:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
 
-  if (!sessionSet) {
+  // Muestra un indicador de carga mientras se procesa la URL
+  if (!isSessionReady) {
     return (
       <ScreenWrapper bg={theme.colors.light}>
-        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={styles.headerText}>Setting up...</Text>
-          <Text style={styles.subtitleText}>Please wait while we verify your reset link.</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Verificando enlace...</Text>
         </View>
       </ScreenWrapper>
     );
@@ -123,29 +102,23 @@ const ResetPassword = () => {
   return (
     <ScreenWrapper bg={theme.colors.light}>
       <View style={styles.container}>
-        <View style={{ marginTop: 10 }}>
-          <BackButton />
-        </View>
-
-        <Text style={styles.headerText}>Reset Password</Text>
-        <Text style={styles.subtitleText}>Enter your new password below.</Text>
+        <Text style={styles.headerText}>Crear Nueva Contraseña</Text>
+        <Text style={styles.subtitleText}>Ingresa tu nueva contraseña segura.</Text>
 
         <Input
           icon={<Icon name="lock" size={26} />}
-          placeholder="New password"
+          placeholder="Nueva contraseña"
           secureTextEntry
           onChangeText={(value) => (passwordRef.current = value)}
         />
-
         <Input
           icon={<Icon name="lock" size={26} />}
-          placeholder="Confirm new password"
+          placeholder="Confirmar nueva contraseña"
           secureTextEntry
           onChangeText={(value) => (confirmPasswordRef.current = value)}
         />
-
         <Button
-          title="Update Password"
+          title="Actualizar Contraseña"
           loading={loading}
           onPress={handleResetPassword}
           textStyle={{ color: theme.colors.dark }}
@@ -158,19 +131,32 @@ const ResetPassword = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    gap: 20,
+    gap: 25,
     paddingHorizontal: wp(5),
-    paddingTop: hp(3),
+    paddingTop: hp(8),
   },
   headerText: {
     fontSize: hp(3.5),
     fontWeight: theme.fonts.bold,
     color: theme.colors.dark,
+    textAlign: 'center',
   },
   subtitleText: {
     fontSize: hp(2),
     color: theme.colors.darkGray,
     lineHeight: hp(3),
+    textAlign: 'center',
+    marginBottom: hp(2),
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: hp(2),
+    color: theme.colors.darkGray,
   },
 });
 

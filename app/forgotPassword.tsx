@@ -7,6 +7,7 @@ import ScreenWrapper from '@/components/ScreenWrapper';
 import { theme } from '@/constants/theme';
 import { hp, wp } from '@/helpers/common';
 import { supabase } from '@/lib/supabase';
+import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
@@ -22,9 +23,12 @@ const ForgotPassword = () => {
       return;
     }
     setLoading(true);
+    // ✅ Genera la URL correcta para el entorno actual
+    const redirectUrl = Linking.createURL('resetPassword'); 
+    console.log('URL de redirección generada:', redirectUrl); // ¡Revisa la consola para confirmar!
+
     const { error } = await supabase.auth.resetPasswordForEmail(emailRef.current, {
-      // ✅ ¡IMPORTANTE! Esta es la URL de tu página en Netlify.
-      redirectTo: 'https://nuvaultapp.netlify.app/reset-password', 
+        redirectTo: redirectUrl,
     });
 
     setLoading(false);
