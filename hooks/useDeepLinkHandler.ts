@@ -1,45 +1,56 @@
 // hooks/useDeepLinkHandler.ts
-import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Linking } from 'react-native';
+import { useRouter } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 
-export function useDeepLinkHandler() {
+export const useDeepLinkHandler = () => {
   const router = useRouter();
-  const { setRecoveryTokens } = useAuthStore();
+  // ✅ OBTENEMOS LA NUEVA FUNCIÓN
+  const { setRecoveryTokens, setIsRecoveringPassword } = useAuthStore();
 
   useEffect(() => {
-    // Función para procesar la URL, ya sea de inicio o de un evento
-    const processUrl = (url: string | null) => {
+    const handleDeepLink = async (url: string | null) => {
       if (!url) return;
 
-      console.log('🔗 Deep Link recibido:', url);
-      const hash = url.split('#')[1];
-      if (!hash) return;
+      const fragment = new URL(url).hash.substring(1);
+      const fragmentParams = new URLSearchParams(fragment);
 
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const type = params.get('type');
-
+      const accessToken = fragmentParams.get('access_token');
+      const refreshToken = fragmentParams.get('refresh_token');
+      const type = fragmentParams.get('type');
+      
       if (type === 'recovery' && accessToken && refreshToken) {
-        console.log(' -> Tokens de recuperación encontrados. Guardando en el almacén...');
-        // Guardamos los tokens en nuestro almacén global (Zustand)
+        console.log('✅ Tokens de recuperación encontrados.');
+        
+        // ✅ PASO 1: Encender el semáforo ANTES de cambiar la sesión
+        setIsRecoveringPassword(true);
+        console.log("🚦 Semáforo de recuperación ENCENDIDO");
+
         setRecoveryTokens(accessToken, refreshToken);
-        // Navegamos a la pantalla de reseteo
+        
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (error) {
+          console.error('Error al establecer la sesión de recuperación:', error.message);
+          setIsRecoveringPassword(false); // Apagar en caso de error
+          return;
+        }
+        
+        console.log('➡️ Redirigiendo a /resetPassword');
         router.replace('/resetPassword');
       }
     };
 
-    // 1. Maneja el enlace si la app se abre desde un estado "muerto"
-    Linking.getInitialURL().then(processUrl);
+    Linking.getInitialURL().then(handleDeepLink);
+    const subscription = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
 
-    // 2. Maneja el enlace si la app ya está abierta en segundo plano
-    const subscription = Linking.addEventListener('url', (event) => processUrl(event.url));
-
-    // Limpia el listener al desmontar
     return () => {
       subscription.remove();
     };
-  }, []); // El array vacío asegura que esto se configure solo una vez
-}
+  }, [router, setRecoveryTokens, setIsRecoveringPassword]);
+};

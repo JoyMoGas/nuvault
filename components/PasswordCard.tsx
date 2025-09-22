@@ -1,35 +1,19 @@
-import { Alert, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import React, { useState } from 'react';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { theme } from '@/constants/theme';
-import { hp, wp } from '@/helpers/common';
+import { hp } from '@/helpers/common';
 import Icon, { IconName } from '@/assets/icons/icons';
 import { supabase } from '@/lib/supabase';
-import { deleteVaultEntry } from '../services/vaultsService';
 import { useRouter } from 'expo-router';
-import * as Clipboard from 'expo-clipboard'; // 👈 Importamos clipboard
+import * as Clipboard from 'expo-clipboard';
 
+// El resto de tu código, como categoryIconsById y getIconByCategory, se queda igual.
 const categoryIconsById: Record<number, IconName> = {
-  1: 'email',
-  2: 'socialMedia',
-  3: 'shopping',
-  4: 'bank',
-  5: 'media',
-  6: 'gaming',
-  7: 'work',
-  8: 'cloud',
-  9: 'education',
-  10: 'health',
-  11: 'airplane',
-  12: 'tools',
-  13: 'news',
-  14: 'bill',
-  15: 'home',
-  16: 'build',
-  17: 'wifi',
-  18: 'browser',
-  19: 'mobile',
-  20: 'other',
+  1: 'email', 2: 'socialMedia', 3: 'shopping', 4: 'bank', 5: 'media', 
+  6: 'gaming', 7: 'work', 8: 'cloud', 9: 'education', 10: 'health', 
+  11: 'airplane', 12: 'tools', 13: 'news', 14: 'bill', 15: 'home', 
+  16: 'build', 17: 'wifi', 18: 'browser', 19: 'mobile', 20: 'other',
 };
 
 const getIconByCategory = (category?: number) => {
@@ -46,47 +30,45 @@ interface Vault {
   is_favorite?: boolean;
 }
 
+// ✅ 1. CAMBIAMOS LA PROP 'onDeleted' POR 'onDeletePress'
 interface PasswordCardProps {
   vault: Vault;
   onFavoriteChanged?: (id: string, newValue: boolean) => void;
-  onDeleted: (id: string) => void;
-  onShowSuccess: (message: string) => void; // 🔹 nuevo
+  onDeletePress: (vault: Vault) => void;
+  onShowSuccess: (message: string) => void;
 }
 
-const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, onDeleted, onShowSuccess }) => {
+// ✅ 2. ACTUALIZAMOS LAS PROPS QUE RECIBE EL COMPONENTE
+const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, onDeletePress, onShowSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFavorite, setIsFavorite] = useState(vault.is_favorite || false);
-
   const router = useRouter();
 
-  // 🔹 Favoritos
+  // Función de favoritos (sin cambios)
   const handleToggleFavorite = async () => {
     const newValue = !isFavorite;
     setIsFavorite(newValue);
-
     const { error } = await supabase
       .from('vault_entries')
       .update({ is_favorite: newValue })
       .eq('id', vault.id);
-
     if (error) {
       console.error('Error al actualizar favorito:', error.message);
-      setIsFavorite(!newValue);
+      setIsFavorite(!newValue); // Revertir si hay error
       return;
     }
-
     if (onFavoriteChanged) {
       onFavoriteChanged(vault.id, newValue);
     }
   };
 
-  // 🔹 Copiar contraseña
+  // Función de copiar (sin cambios)
   const handleCopyPassword = async () => {
     await Clipboard.setStringAsync(vault.encrypted_password);
-    onShowSuccess("Password copied to clipboard!"); // 👈 disparar modal desde Home
+    onShowSuccess("Password copied to clipboard!");
   };
 
-  // 🔹 Editar
+  // Función de editar (sin cambios)
   const handleEdit = () => {
     router.push({
       pathname: '/editPassword',
@@ -94,29 +76,11 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
     });
   };
 
-  // 🔹 Eliminar
+  // ✅ 3. REEMPLAZAMOS COMPLETAMENTE LA FUNCIÓN 'handleDelete'
+  // Ahora, esta función no contiene lógica de borrado ni alertas.
+  // Simplemente notifica al componente padre (Home) que el usuario quiere borrar.
   const handleDelete = () => {
-    Alert.alert(
-      "Confirmar eliminación",
-      "¿Estás seguro de que quieres eliminar este registro?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: async () => {
-            const { success, error } = await deleteVaultEntry(vault.id);
-            if (success) {
-              onDeleted(vault.id);
-              onShowSuccess("Password deleted successfully!"); // 👈 disparar modal desde Home
-            } else {
-              console.error("Error al eliminar el registro:", error);
-              Alert.alert("Error", "No se pudo eliminar el registro. Inténtalo de nuevo.");
-            }
-          }
-        }
-      ]
-    );
+    onDeletePress(vault);
   };
 
   return (
@@ -130,10 +94,10 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
             <Icon name="edit" size={24} color={theme.colors.light} />
           </Pressable>
           <Pressable
-            onPress={handleDelete}
-            style={[{ backgroundColor: '#FFD400' }, styles.actionButton]}
+            onPress={handleDelete} // La UI llama a la nueva función
+            style={[{ backgroundColor: theme.colors.red }, styles.actionButton]} // Color cambiado para ser más intuitivo
           >
-            <Icon name="delete" size={24} color={theme.colors.darkGray} />
+            <Icon name="delete" size={24} color={theme.colors.light} />
           </Pressable>
         </View>
       )}
@@ -166,7 +130,6 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
         </View>
 
         <View style={styles.iconsContainer}>
-          {/* 👇 Botón copiar */}
           <Pressable onPress={handleCopyPassword}>
             <Icon name="copy" size={31} />
           </Pressable>
@@ -186,6 +149,7 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
 
 export default PasswordCard;
 
+// ESTILOS (SIN CAMBIOS)
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',

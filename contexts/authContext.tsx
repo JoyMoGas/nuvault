@@ -1,6 +1,6 @@
 // contexts/authContext.tsx
 import { supabase } from "@/lib/supabase";
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback } from "react";
 
 // --- Tipos ---
 interface User {
@@ -26,44 +26,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
 
-  const setAuth = (authUser: User | null) => {
+  // ✅ ¡LA SOLUCIÓN ESTÁ AQUÍ!
+  // Envolvemos las funciones en useCallback para darles una referencia estable.
+  // Esto evita que los hooks que dependen de ellas se reinicien innecesariamente.
+  const setAuth = useCallback((authUser: User | null) => {
+    console.log('[AuthContext] setAuth llamado. Usuario:', authUser?.email || 'null');
     setUser(authUser);
-  };
+  }, []);
 
-  const setUserData = (userData: Partial<User>) => {
-    if (user) {
-      setUser({ ...user, ...userData });
-    }
-  };
+  const setUserData = useCallback((userData: Partial<User>) => {
+    setUser(currentUser => (currentUser ? { ...currentUser, ...userData } : null));
+  }, []);
 
-  // ✅ LÓGICA MEJORADA
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      console.log("🚪 Iniciando logout...");
-      
-      // 1. Limpiar estado local PRIMERO
-      setAuth(null);
-      
-      // 2. Luego hacer signOut global en Supabase
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
-      
+      console.log("[AuthContext] 🚪 Iniciando logout...");
+      const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error("Error en signOut:", error.message);
-        throw error;
+        console.error("Error en signOut de Supabase:", error.message);
       }
-      
-      console.log("✅ Logout completado exitosamente");
-      
+      setAuth(null); // Limpiamos el estado después de que signOut termine.
+      console.log("[AuthContext] ✅ Logout completado.");
     } catch (e: any) {
-      console.error("❌ Error durante logout:", e.message);
-      // Incluso si falla el signOut, mantener el estado local limpio
+      console.error("❌ Error durante el logout:", e.message);
       setAuth(null);
-      throw e; // Re-lanzar para que changePassword pueda manejar el error
     }
-  };
+  }, [setAuth]); // setAuth es estable, por lo que logout también lo es.
+  
+  // Creamos el valor del contexto una vez para mayor optimización.
+  const contextValue = { user, setAuth, setUserData, logout };
 
   return (
-    <AuthContext.Provider value={{ user, setAuth, setUserData, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
@@ -72,7 +66,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth debe ser usado dentro de un AuthProvider");
   }
   return context;
 };

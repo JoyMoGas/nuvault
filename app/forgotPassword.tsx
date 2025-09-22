@@ -1,4 +1,3 @@
-// app/forgotPassword.tsx
 import Icon from '@/assets/icons/icons';
 import BackButton from '@/components/BackButton';
 import Button from '@/components/Button';
@@ -10,33 +9,55 @@ import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import CustomModal from '@/components/CustomModal';
 
 const ForgotPassword = () => {
   const router = useRouter();
   const emailRef = useRef('');
   const [loading, setLoading] = useState(false);
+  
+  const [modalConfig, setModalConfig] = useState<any>(null);
 
   const handleSendInstructions = async () => {
     if (!emailRef.current) {
-      Alert.alert('Error', 'Please enter your email address.');
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "Please enter your email address.",
+        primaryButtonTitle: "OK",
+      });
       return;
     }
-    setLoading(true);
-    // ✅ Genera la URL correcta para el entorno actual
-    const redirectUrl = Linking.createURL('resetPassword'); 
-    console.log('URL de redirección generada:', redirectUrl); // ¡Revisa la consola para confirmar!
 
+    setLoading(true);
+    
+    const redirectUrl = Linking.createURL('resetPassword'); 
+    
     const { error } = await supabase.auth.resetPasswordForEmail(emailRef.current, {
         redirectTo: redirectUrl,
     });
 
     setLoading(false);
+
     if (error) {
-      Alert.alert('Error', error.message);
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: error.message,
+        primaryButtonTitle: "OK",
+      });
     } else {
-      Alert.alert('Check your email', 'Password reset instructions have been sent to your email address.');
-      router.back();
+      setModalConfig({
+        iconName: "checkEmail",
+        iconColor: theme.colors.green,
+        title: "Check your email",
+        description: "Password reset instructions have been sent to your email address.",
+        primaryButtonTitle: "OK",
+        onPrimaryButtonPress: () => router.back(),
+      });
     }
   };
 
@@ -61,6 +82,18 @@ const ForgotPassword = () => {
           textStyle={{ color: theme.colors.dark }}
         />
       </View>
+
+      {/* ✅ 3. Renderizar el modal dinámico */}
+      {modalConfig && (
+        <CustomModal
+          isVisible={!!modalConfig}
+          onClose={() => setModalConfig(null)}
+          {...modalConfig}
+          onPrimaryButtonPress={
+            modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+          }
+        />
+      )}
     </ScreenWrapper>
   );
 };

@@ -4,13 +4,11 @@ import ScreenWrapper from "@/components/ScreenWrapper";
 import { theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/authContext";
 import { hp, wp } from "@/helpers/common";
-import { supabase } from "@/lib/supabase";
-import { updateUser, deleteUserAccount } from "@/services/userService";
-import { Stack, useRouter } from "expo-router";
+import { deleteUserAccount, updateUser } from "@/services/userService";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,38 +18,55 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import CustomModal from "@/components/CustomModal";
+import { supabase } from "@/lib/supabase";
 
 const Settings = () => {
-  const { user, logout, setUserData } = useAuth();
+  const { user, setUserData } = useAuth();
   const [username, setUsername] = useState(user?.username || "");
   const [isEditing, setIsEditing] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // ✅ GESTIÓN DE MODALES: Un único estado para controlar todos los modales.
+  // Cuando es 'null', no hay modal. Cuando tiene un objeto, se muestra el modal con esa configuración.
+  const [modalConfig, setModalConfig] = useState<any>(null);
+
   const router = useRouter();
 
-  const handleLogout = async () => {
-    Alert.alert("Confirm", "Are you sure you want to log out?", [
-      {
-        text: "Cancel",
-        onPress: () => console.log("modal cancelled"),
-        style: "cancel",
-      },
-      {
-        text: "Logout",
-        onPress: () => onLogout(),
-        style: "destructive",
-      },
-    ]);
+  // --- LOGOUT ---
+  const handleLogout = () => {
+    setModalConfig({
+      iconName: "logOut",
+      iconColor: theme.colors.red,
+      title: "Confirm Logout",
+      description: "Are you sure you want to log out?",
+      primaryButtonTitle: "Logout",
+      onPrimaryButtonPress: confirmLogout,
+      primaryButtonColor: theme.colors.red,
+      secondaryButtonTitle: "Cancel",
+    });
   };
 
   const onLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      Alert.alert("Sign out", "Error signing out!");
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "An error occurred while signing out. Please try again.",
+        primaryButtonTitle: "OK",
+      });
     }
   };
 
+  const confirmLogout = () => {
+    setModalConfig(null); // Cierra el modal de confirmación
+    onLogout();
+  };
+
+  // --- USERNAME ---
   useEffect(() => {
     if (user?.username) {
       setUsername(user.username);
@@ -60,170 +75,145 @@ const Settings = () => {
 
   const handleUpdateUsername = async () => {
     if (username.trim() === "") {
-      Alert.alert("Error", "Username cannot be empty.");
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "Username cannot be empty.",
+        primaryButtonTitle: "OK",
+      });
       return;
     }
 
     const res = await updateUser(user.id, { username: username.trim() });
     if (res.success) {
-      console.log("Username updated in the database.");
       setUserData({ username: username.trim() });
       setIsEditing(false);
     } else {
-      console.error("Error updating username:", res.msg);
-      Alert.alert("Error", "Could not update username. Please try again.");
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "Could not update username. Please try again.",
+        primaryButtonTitle: "OK",
+      });
     }
   };
 
+  // --- DELETE ACCOUNT ---
   const handleDeleteAccount = () => {
-    Alert.alert(
-      "Confirm Deletion",
-      "Are you sure you want to delete your account? This action is irreversible and will permanently delete all your data.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              const result = await deleteUserAccount(user?.id);
+    setModalConfig({
+      iconName: "delete",
+      iconColor: theme.colors.red,
+      title: "Confirm Deletion",
+      description: "This action is irreversible and will permanently delete all your data. Are you sure?",
+      primaryButtonTitle: "Delete",
+      onPrimaryButtonPress: executeDelete,
+      primaryButtonColor: theme.colors.red,
+      secondaryButtonTitle: "Cancel",
+    });
+  };
 
-              if (result.success) {
-                Alert.alert(
-                  "Success",
-                  "Your account has been completely deleted.",
-                );
-                // User will be automatically signed out by the deleteUserAccount function
-              } else {
-                Alert.alert(
-                  "Error",
-                  result.msg || "Could not delete account. Please try again.",
-                );
-              }
-            } catch (error) {
-              console.error("Unexpected error:", error);
-              Alert.alert(
-                "Error",
-                "An unexpected error occurred. Please try again.",
-              );
-            } finally {
-              setIsDeleting(false);
-            }
-          },
-        },
-      ],
-      { cancelable: false },
-    );
+  const executeDelete = async () => {
+    setModalConfig(null); // Cierra el modal de confirmación
+    setIsDeleting(true);
+    try {
+      const result = await deleteUserAccount(user?.id);
+      if (result.success) {
+        setModalConfig({
+          iconName: "check",
+          iconColor: theme.colors.green,
+          title: "Success",
+          description: "Your account has been completely deleted.",
+          primaryButtonTitle: "OK",
+          // La acción del botón OK es opcional ya que el usuario será deslogueado por el trigger de Supabase.
+          // Si quisieras redirigir manualmente, lo harías aquí.
+        });
+      } else {
+        setModalConfig({
+          iconName: "error",
+          iconColor: theme.colors.red,
+          title: "Error",
+          description: result.msg || "Could not delete account. Please try again.",
+          primaryButtonTitle: "OK",
+        });
+      }
+    } catch (error) {
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        primaryButtonTitle: "OK",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
     <ScreenWrapper bg={theme.colors.light}>
       <StatusBar style="dark" />
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: hp(5) }}>
+        {/* Tu JSX para la UI se queda igual */}
         <View style={styles.header}>
           <BackButton size={30} />
           <Text style={styles.headerTitle}>Settings</Text>
         </View>
 
-        {/* Sección de Username */}
+        {/* Account Section */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.inputContainer}>
           <View style={styles.usernameRow}>
-            <Icon
-              name="user"
-              size={20}
-              color={theme.colors.darkGray}
-              style={styles.icon}
-            />
+            <Icon name="user" size={20} color={theme.colors.darkGray} style={styles.icon}/>
             {isEditing ? (
-              <TextInput
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-                onEndEditing={handleUpdateUsername}
-                autoFocus
-              />
+              <TextInput style={styles.input} value={username} onChangeText={setUsername} onEndEditing={handleUpdateUsername} autoFocus />
             ) : (
               <Text style={styles.infoText}>{username}</Text>
             )}
-            <Pressable
-              onPress={() => setIsEditing(!isEditing)}
-              style={styles.editIcon}
-            >
-              <Icon
-                name={isEditing ? "correct" : "fullEdit"}
-                size={20}
-                color={theme.colors.darkGray}
-              />
+            <Pressable onPress={() => setIsEditing(!isEditing)} style={styles.editIcon}>
+              <Icon name={isEditing ? "correct" : "fullEdit"} size={20} color={theme.colors.darkGray}/>
             </Pressable>
           </View>
         </View>
 
-        {/* Sección de Seguridad */}
+        {/* Security Section */}
         <Text style={styles.sectionTitle}>Security</Text>
         <View style={styles.buttonContainer}>
-          <Pressable
-            style={styles.button}
-            onPress={() => router.push("/changePassword")}
-          >
-            <Icon name="lock" size={20} color={theme.colors.darkGray} style={styles.buttonIcon} />
+          <Pressable style={styles.button} onPress={() => router.push("/changePassword")}>
+            <Icon name="lock" size={20} color={theme.colors.darkGray} style={styles.buttonIcon}/>
             <Text style={styles.buttonText}>Change Password</Text>
           </Pressable>
-
           <Pressable style={styles.button} onPress={handleLogout}>
-            <Icon
-              name="logOut"
-              size={20}
-              color={theme.colors.red}
-              style={styles.buttonIcon}
-            />
-            <Text style={[styles.buttonText, { color: theme.colors.red }]}>
-              Logout
-            </Text>
+            <Icon name="logOut" size={20} color={theme.colors.red} style={styles.buttonIcon}/>
+            <Text style={[styles.buttonText, { color: theme.colors.red }]}>Logout</Text>
           </Pressable>
         </View>
 
-        {/* Sección de Notificaciones */}
+        {/* Notifications Section */}
         <Text style={styles.sectionTitle}>Notifications</Text>
         <View style={styles.notificationsContainer}>
-          <View style={styles.notificationsRow}>
-            <View style={styles.notificationsTextContainer}>
-              <Icon
-                name="bell"
-                size={20}
-                color={theme.colors.darkGray}
-                style={styles.icon}
-              />
-              <Text style={styles.infoText}>App Notifications</Text>
+            <View style={styles.notificationsRow}>
+                <View style={styles.notificationsTextContainer}>
+                    <Icon name="bell" size={20} color={theme.colors.darkGray} style={styles.icon}/>
+                    <Text style={styles.infoText}>App Notifications</Text>
+                </View>
+                <Switch
+                    trackColor={{ false: theme.colors.darkGray, true: theme.colors.primary }}
+                    thumbColor={theme.colors.light}
+                    onValueChange={() => setNotificationsEnabled((prev) => !prev)}
+                    value={notificationsEnabled}
+                    style={styles.switch}
+                />
             </View>
-            <Switch
-              trackColor={{
-                false: theme.colors.darkGray,
-                true: theme.colors.primary,
-              }}
-              thumbColor={theme.colors.light}
-              onValueChange={() => setNotificationsEnabled((prev) => !prev)}
-              value={notificationsEnabled}
-              style={styles.switch}
-            />
-          </View>
         </View>
         <Text style={styles.unavailableText}>
-          (This option is not available yet, so it does not affect anything if
-          enabled or disabled)
+            (This option is not available yet)
         </Text>
-
-        {/* Sección de Eliminar Cuenta */}
+        
+        {/* Delete Account Section */}
         <View style={styles.deleteSectionContainer}>
-          <Pressable
-            style={styles.deleteButton}
-            onPress={handleDeleteAccount}
-            disabled={isDeleting}
-          >
+          <Pressable style={styles.deleteButton} onPress={handleDeleteAccount} disabled={isDeleting}>
             {isDeleting ? (
               <ActivityIndicator color={theme.colors.light} />
             ) : (
@@ -232,12 +222,33 @@ const Settings = () => {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* ✅ MODAL ÚNICO Y DINÁMICO */}
+      {modalConfig && (
+        <CustomModal
+          isVisible={!!modalConfig}
+          onClose={() => setModalConfig(null)}
+          iconName={modalConfig.iconName}
+          iconColor={modalConfig.iconColor}
+          title={modalConfig.title}
+          description={modalConfig.description}
+          primaryButtonTitle={modalConfig.primaryButtonTitle}
+          onPrimaryButtonPress={
+            modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+          }
+          primaryButtonColor={modalConfig.primaryButtonColor}
+          secondaryButtonTitle={modalConfig.secondaryButtonTitle}
+          onSecondaryButtonPress={
+            modalConfig.onSecondaryButtonPress || (() => setModalConfig(null))
+          }
+        />
+      )}
     </ScreenWrapper>
   );
 };
 
-export default Settings;
 
+// ... Tus estilos se quedan exactamente igual
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -267,7 +278,6 @@ const styles = StyleSheet.create({
     marginLeft: -wp(7),
   },
   inputContainer: {
-    backgroundColor: theme.colors.semiWhite,
     borderRadius: theme.radius.xl,
     borderWidth: 1,
     borderColor: theme.colors.gray,
@@ -301,11 +311,13 @@ const styles = StyleSheet.create({
     gap: hp(1.5),
   },
   button: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.semiWhite,
-    padding: hp(1.5),
+    flexDirection: 'row',
     borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    alignItems: "center",
+    borderColor: theme.colors.gray,
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(2),
   },
   buttonIcon: {
     marginRight: wp(3),
@@ -316,7 +328,6 @@ const styles = StyleSheet.create({
     color: theme.colors.dark,
   },
   notificationsContainer: {
-    backgroundColor: theme.colors.semiWhite,
     borderRadius: theme.radius.xl,
     borderWidth: 1,
     borderColor: theme.colors.gray,
@@ -358,3 +369,6 @@ const styles = StyleSheet.create({
     color: theme.colors.light,
   },
 });
+
+
+export default Settings;

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from '../assets/icons/icons/index';
 import BackButton from '../components/BackButton';
 import Button from '../components/Button';
@@ -10,62 +10,90 @@ import ScreenWrapper from '../components/ScreenWrapper';
 import { theme } from '../constants/theme';
 import { hp, wp } from '../helpers/common';
 import { supabase } from '../lib/supabase';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import CustomModal from '../components/CustomModal'; // ✅ 1. Importar CustomModal
 
 const SignUp = () => {
   const router = useRouter();
-  const emailRef = useRef('');
-  const passwordRef = useRef('');
-  const nameRef = useRef('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({ username: '', email: '', password: '', general: '' });
+  
+  // ✅ 2. Añadir estado para la configuración del modal
+  const [modalConfig, setModalConfig] = useState<any>(null);
 
-  const Routes = {
-    SIGN_UP: '/signUp',
-    LOGIN: '/login',
-    WELCOME: '/welcome',
-  } as const;
-
-  type RouteKeys = keyof typeof Routes;
-
-  const navigate = (route: RouteKeys) => router.push(Routes[route]);
+  // ✅ 3. Crear una función para manejar la acción del modal de éxito
+  const handleSuccess = () => {
+    setModalConfig(null); // Ocultar el modal
+    router.push('/login'); // Navegar a la pantalla de login
+  };
 
   const onSubmit = async () => {
-    if (!emailRef.current || !passwordRef.current || !nameRef.current) {
-      Alert.alert('Sign Up', 'Please fill all the fields!');
+    setErrors({ username: '', email: '', password: '', general: '' });
+
+    if (!username || !email || !password) {
+      setErrors(prev => ({ ...prev, general: 'Please fill all the fields!' }));
+      return;
+    }
+    if (password.length < 6) {
+      setErrors(prev => ({...prev, password: 'Password must be at least 6 characters.'}));
       return;
     }
 
-    let username = nameRef.current.trim();
-    let email = emailRef.current.trim();
-    let password = passwordRef.current.trim();
-
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username,
-        },
-        // ✅ AGREGADO: URL de redirección para verificación de email
-        emailRedirectTo: 'https://nuvaultapp.netlify.app/email-validation',
+    const { data, error } = await supabase.functions.invoke('sign-up', {
+      body: { 
+        email: email.trim(), 
+        password: password.trim(), 
+        username: username.trim() 
       },
     });
 
     setLoading(false);
 
     if (error) {
-      Alert.alert('Sign Up', error.message);
+      let errorMessage = "An unexpected error occurred.";
+
+      if (error instanceof FunctionsHttpError) {
+        try {
+          const errorData = await error.context.json();
+          errorMessage = errorData.error;
+        } catch (e) {
+          errorMessage = error.message;
+        }
+      } else {
+        errorMessage = error.message;
+      }
+      
+      if (errorMessage.includes('User already registered')) {
+          setErrors(prev => ({...prev, email: 'A user with this email is already registered.'}));
+      } else if (errorMessage.includes('username is already in use')) {
+          setErrors(prev => ({...prev, username: 'That username is already in use.'}));
+      } else if (errorMessage.includes('Password should be at least 6 characters')) {
+          setErrors(prev => ({...prev, password: errorMessage}));
+      } else {
+          setErrors(prev => ({...prev, general: errorMessage}));
+      }
       return;
     }
 
-    if (data.user) {
-      Alert.alert(
-        'Verify your email',
-        'We sent you a confirmation link. Please check your inbox before logging in.'
-      );
-      // Opcional: redirigir a una pantalla "Check your email"
-      navigate('LOGIN');
+    setModalConfig({
+        iconName: "checkEmail",
+        iconColor: theme.colors.green,
+        title: "Verify your email",
+        description: "We sent you a confirmation link. Please check your inbox before logging in.",
+        primaryButtonTitle: "OK",
+        onPrimaryButtonPress: handleSuccess,
+    });
+  };
+  
+  const clearErrorsOnChange = () => {
+    if (errors.username || errors.email || errors.password || errors.general) {
+      setErrors({ username: '', email: '', password: '', general: '' });
     }
   };
 
@@ -73,62 +101,61 @@ const SignUp = () => {
     <ScreenWrapper bg={theme.colors.dark}>
       <StatusBar style="light" />
       <View style={styles.container}>
-        {/* back button */}
         <View style={{marginTop: 10}}>
-          <BackButton  size={30} />
+          <BackButton size={30} />
         </View>
-        
-
-        {/* welcome */}
         <View>
           <Text style={styles.welcomeText}>Create Your Vault</Text>
           <Text style={styles.welcomeSubText}>
             Sign up to protect, store and organize your passwords in one secure place.
           </Text>
         </View>
-
-        {/* form */}
         <View style={styles.formWrapper}>
           <View style={styles.formContainer}>
-
+            {errors.general ? <Text style={styles.errorGeneral}>{errors.general}</Text> : null}
             <Input
-              icon={<Icon name="user" size={26} />}
+              icon={<Icon name="user" size={26} color={theme.colors.text} />}
               placeholder="Enter your name"
-              onChangeText={(value: string) => {
-                nameRef.current = value;
+              value={username}
+              onChangeText={(text) => {
+                setUsername(text);
+                clearErrorsOnChange();
               }}
             />
+            {errors.username ? <Text style={styles.errorTag}>{errors.username}</Text> : null}
             <Input
-              icon={<Icon name="email" size={26} />}
+              icon={<Icon name="email" size={26} color={theme.colors.text} />}
               placeholder="Enter your email"
-              onChangeText={(value: string) => {
-                emailRef.current = value;
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                clearErrorsOnChange();
               }}
+              autoCapitalize="none"
+              keyboardType="email-address"
             />
+            {errors.email ? <Text style={styles.errorTag}>{errors.email}</Text> : null}
             <Input
-              icon={<Icon name="lock" size={26} />}
+              icon={<Icon name="lock" size={26} color={theme.colors.text} />}
               placeholder="Enter your password"
-              secureTextEntry
-              onChangeText={(value: string) => {
-                passwordRef.current = value;
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                clearErrorsOnChange();
               }}
+              secureTextEntry={!isPasswordVisible}
+              rightIcon={
+                <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                  <Icon name={isPasswordVisible ? 'show' : 'hide'} size={26} color={theme.colors.text} />
+                </Pressable>
+              }
             />
-
+            {errors.password ? <Text style={styles.errorTag}>{errors.password}</Text> : null}
             <Button title={'Sign Up'} loading={loading} onPress={onSubmit} textStyle={{color: theme.colors.dark}} />
-
-            {/* footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account?</Text>
-              <Pressable onPress={() => navigate('LOGIN')}>
-                <Text
-                  style={[
-                    styles.footerText,
-                    {
-                      color: theme.colors.primaryDark,
-                      fontWeight: theme.fonts.semibold,
-                    },
-                  ]}
-                >
+              <Pressable onPress={() => router.push('/login')}>
+                <Text style={[ styles.footerText, { color: theme.colors.primaryDark, fontWeight: theme.fonts.semibold } ]}>
                   Login
                 </Text>
               </Pressable>
@@ -136,6 +163,18 @@ const SignUp = () => {
           </View>
         </View>
       </View>
+
+      {/* ✅ 5. Renderizar nuestro modal dinámico */}
+      {modalConfig && (
+        <CustomModal
+            isVisible={!!modalConfig}
+            onClose={() => setModalConfig(null)}
+            {...modalConfig}
+            onPrimaryButtonPress={
+                modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+            }
+        />
+      )}
     </ScreenWrapper>
   );
 };
@@ -148,24 +187,20 @@ const styles = StyleSheet.create({
     gap: 45,
     paddingHorizontal: wp(5),
   },
-
   welcomeText: {
     fontSize: hp(4),
     fontWeight: theme.fonts.bold,
     color: theme.colors.textLight,
   },
-
   welcomeSubText: {
     fontSize: hp(2),
     fontWeight: theme.fonts.medium,
     color: theme.colors.textLight,
   },
-
   formWrapper: {
     flex: 1,
     marginHorizontal: -wp(5)
   },
-
   formContainer: {
     flex: 1,
     backgroundColor: theme.colors.light,
@@ -180,27 +215,28 @@ const styles = StyleSheet.create({
     elevation: 5,
     gap: 20,
   },
-
-  form: {
-    gap: 25,
-  },
-
-  forgotPassword: {
-    textAlign: 'right',
-    fontWeight: theme.fonts.semibold,
-    color: theme.colors.text,
-  },
-
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 5,
   },
-
   footerText: {
     textAlign: 'center',
     color: theme.colors.text,
     fontSize: hp(1.6),
+  },
+  errorGeneral: {
+    color: theme.colors.red,
+    fontSize: hp(1.8),
+    textAlign: 'center',
+    marginBottom: hp(1),
+  },
+  errorTag: {
+    color: theme.colors.red,
+    fontSize: hp(1.6),
+    marginTop: -hp(1.5),
+    marginBottom: hp(0.5),
+    paddingLeft: wp(2),
   },
 });

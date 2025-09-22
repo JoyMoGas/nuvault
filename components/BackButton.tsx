@@ -16,7 +16,7 @@ const BackButton: React.FC<BackButtonProps> = ({ size = 24 }) => {
       onPress={() => router.back()}
       style={styles.button} // padding proporcional
     >
-      <Icon name="arrowLeft" size={size} color="white" />
+      <Icon name="arrowLeft" size={size} />
     </Pressable>
   );
 };
@@ -28,7 +28,8 @@ const styles = StyleSheet.create({
   button: {
     alignSelf: 'flex-start',
     padding: 5,
+    color: theme.colors.darkGray,
     borderRadius: theme.radius.xxl,
-    backgroundColor: theme.colors.primary,
+    zIndex: 999,
   },
 });

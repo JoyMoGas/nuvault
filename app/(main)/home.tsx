@@ -11,21 +11,21 @@ import { getGreeting } from '@/helpers/greetings';
 import SearchBar from '@/components/SearchBar';
 import { getUserData } from '@/services/userService';
 import { supabase } from '@/lib/supabase';
-import { fetchVaults } from '@/services/vaultsService';
+import { deleteVault, fetchVaults } from '@/services/vaultsService';
 import Icon from '@/assets/icons/icons';
 import { getUserSecurityStatus } from '@/helpers/calculatePasswordStrength';
 import GoToAdd from '@/components/GoToAdd';
 import SettingsButton from '@/components/SettingsButton';
 import GenerateButton from '@/components/GenerateButton';
 import { StatusBar } from 'expo-status-bar';
+import CustomModal from '@/components/CustomModal';
 import SuccessModal from '@/components/SuccessModal';
 
 let limit = 0;
 
 interface Vault {
-  id: string; // 🔹 Se asegura que el ID sea de tipo string para consistencia
+  id: string;
   user_id?: string;
-  userId?: string;
   service_name: string;
   service_username: string;
   created_at?: string;
@@ -48,6 +48,7 @@ const Home = () => {
   const [searchText, setSearchText] = useState('');
   const [selectedTag, setSelectedTag] = useState<'All' | 'Favorites' | 'Recent' | 'Oldest'>('All');
   const [username, setUsername] = useState(user?.username || 'User');
+  const [modalConfig, setModalConfig] = useState<any>(null);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -55,7 +56,6 @@ const Home = () => {
     setSuccessMessage(message);
     setSuccessModalVisible(true);
   };
-
 
   useEffect(() => {
     setGreeting(getGreeting(new Date()));
@@ -85,21 +85,16 @@ const Home = () => {
     });
 
   const handleVaultEvent = async (payload: Payload) => {
-    console.log('Evento de Supabase recibido:', payload.eventType, 'con ID:', payload.new?.id || payload.old?.id);
     if (payload.eventType === 'INSERT' && payload.new?.id) {
       const newVault: Vault = { ...payload.new };
       if (newVault.user_id !== user?.id) return;
-
       const res = await getUserData(newVault.user_id);
       newVault.user = res.success ? res.data : {};
-
       setVaults(prevVaults => [newVault, ...prevVaults]);
     }
-    // 🔹 Lógica para la eliminación en tiempo real con la suscripción
     if (payload.eventType === 'DELETE' && payload.old?.id) {
       setVaults(prevVaults => prevVaults.filter(vault => vault.id !== payload.old?.id));
     }
-    // 🔹 Lógica para la actualización en tiempo real con la suscripción
     if (payload.eventType === 'UPDATE' && payload.new?.id) {
       setVaults(prevVaults =>
         prevVaults.map(vault => (vault.id === payload.new?.id ? { ...vault, ...payload.new } : vault))
@@ -107,10 +102,8 @@ const Home = () => {
     }
   };
 
-  // 🔹 Nueva suscripción en tiempo real para el nombre de usuario
   useEffect(() => {
     if (!user?.id) return;
-
     const userChannel = supabase
       .channel(`user:${user.id}`)
       .on(
@@ -119,17 +112,14 @@ const Home = () => {
         (payload: any) => {
           if (payload.new.username) {
             setUsername(payload.new.username);
-            console.log("Username updated in real-time:", payload.new.username);
           }
         }
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(userChannel);
     };
   }, [user?.id]);
-
 
   useEffect(() => {
     const vaultChannel = supabase
@@ -140,9 +130,7 @@ const Home = () => {
         handleVaultEvent
       )
       .subscribe();
-
     fetchVaultsData();
-
     return () => {
       supabase.removeChannel(vaultChannel);
     };
@@ -150,7 +138,6 @@ const Home = () => {
 
   const fetchVaultsData = async () => {
     if (!user?.id) return;
-    
     limit += 10;
     const res = await fetchVaults(user.id, limit);
     if (res.success) {
@@ -162,114 +149,147 @@ const Home = () => {
 
   useEffect(() => {
     if (!user?.id) return;
-
     const fetchSecurity = async () => {
       const result = await getUserSecurityStatus(user.id);
       setSecurityStatus(result.securityStatus);
     };
-    
-    // 🔹 Llama a la función que recalcula el puntaje de seguridad
     fetchSecurity();
   }, [user, vaults]);
 
-  // 🔹 Esta función ahora es un respaldo para la eliminación.
-  const handleVaultDeleted = (deletedId: string) => {
-    setVaults(prevVaults => prevVaults.filter(vault => vault.id !== deletedId));
+  const handleDeleteRequest = (vaultToDelete: Vault) => {
+    setModalConfig({
+      iconName: "delete",
+      iconColor: theme.colors.red,
+      title: "Confirm Deletion",
+      description: `Are you sure you want to delete the entry for "${vaultToDelete.service_name}"?`,
+      primaryButtonTitle: "Delete",
+      onPrimaryButtonPress: () => executeDelete(vaultToDelete.id),
+      primaryButtonColor: theme.colors.red,
+      secondaryButtonTitle: "Cancel",
+    });
+  };
+
+  const executeDelete = async (vaultId: string) => {
+    setModalConfig(null);
+    const res = await deleteVault(vaultId);
+    if (res.success) {
+      setVaults(prevVaults => prevVaults.filter(v => v.id !== vaultId));
+    } else {
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: res.msg || "Failed to delete the entry. Please try again.",
+        primaryButtonTitle: "OK",
+      });
+    }
   };
 
   return (
-  <ScreenWrapper bg={theme.colors.dark}>
-    <StatusBar style='light' />
-    
-    <ScrollView
-      contentContainerStyle={styles.scrollContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.container}>
-        <View style={styles.userInfoRow}>
-          <View>
-            <Text style={styles.username}>{username}</Text>
-            <Text style={styles.greetings}>{greeting}</Text>
+    <ScreenWrapper bg={theme.colors.dark}>
+      <StatusBar style='light' />
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <View style={styles.userInfoRow}>
+            <View>
+              <Text style={styles.username}>{username}</Text>
+              <Text style={styles.greetings}>{greeting}</Text>
+            </View>
+            <SettingsButton />
           </View>
-          <SettingsButton />
         </View>
-      </View>
 
-      <View style={styles.securityContainer}>
-        <ScoreBar score={securityStatus}>
-          <SecurityScore score={securityStatus} />
-        </ScoreBar>
-      </View>
+        <View style={styles.securityContainer}>
+          <ScoreBar score={securityStatus}>
+            <SecurityScore score={securityStatus} />
+          </ScoreBar>
+        </View>
 
-      <View style={styles.generateContainer}>
-        <GenerateButton />
-      </View>
+        <View style={styles.generateContainer}>
+          <GenerateButton />
+        </View>
 
-      <View style={styles.content}>
-        <SearchBar value={searchText} onChangeText={setSearchText} />
+        <View style={styles.content}>
+          <SearchBar value={searchText} onChangeText={setSearchText} />
 
-        <View style={styles.tagsRow}>
-          {['All', 'Favorites', 'Recent', 'Oldest'].map((tag) => (
-            <Pressable
-              key={tag}
-              onPress={() => setSelectedTag(tag as any)}
-              style={[styles.tag, selectedTag === tag && styles.tagActive]}
-            >
-              <Text style={[styles.tagText, selectedTag === tag && styles.tagTextActive]}>
-                {tag}
+          <View style={styles.tagsRow}>
+            {['All', 'Favorites', 'Recent', 'Oldest'].map((tag) => (
+              <Pressable
+                key={tag}
+                onPress={() => setSelectedTag(tag as any)}
+                style={[styles.tag, selectedTag === tag && styles.tagActive]}
+              >
+                <Text style={[styles.tagText, selectedTag === tag && styles.tagTextActive]}>
+                  {tag}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {tagFilteredVaults.length === 0 ? (
+            <View style={styles.noVaultsContainer}>
+              <Text style={styles.noVaultsText}>
+                {"You don't have any saved passwords yet."}
               </Text>
-            </Pressable>
-          ))}
+              <Text style={styles.noVaultsText}>
+                Please press <Icon name="add" size={16} /> to start
+              </Text>
+            </View>
+          ) : (
+            tagFilteredVaults.map((vault) => (
+              <PasswordCard
+                key={vault.id}
+                vault={vault}
+                onFavoriteChanged={(id, newValue) => {
+                  setVaults((prev) =>
+                    prev.map((v) =>
+                      v.id === id ? { ...v, is_favorite: newValue } : v
+                    )
+                  );
+                }}
+                onDeletePress={handleDeleteRequest}
+                onShowSuccess={showSuccessModal} 
+              />
+            ))
+          )}
         </View>
+      </ScrollView>
 
-        {tagFilteredVaults.length === 0 ? (
-          <View style={styles.noVaultsContainer}>
-            <Text style={styles.noVaultsText}>
-              {"You don't have any saved passwords yet."}
-            </Text>
-            <Text style={styles.noVaultsText}>
-              Please press <Icon name="add" size={16} /> to start
-            </Text>
-          </View>
-        ) : (
-          tagFilteredVaults.map((vault) => (
-            <PasswordCard
-              key={vault.id}
-              vault={vault}
-              onFavoriteChanged={(id, newValue) => {
-                setVaults((prev) =>
-                  prev.map((v) =>
-                    v.id === id ? { ...v, is_favorite: newValue } : v
-                  )
-                );
-              }}
-              onDeleted={handleVaultDeleted}
-              onShowSuccess={showSuccessModal} 
-            />
-          ))
-        )}
-      </View>
-    </ScrollView>
-
-      {successModalVisible && (
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <SuccessModal
-          visible={successModalVisible}
-          message={successMessage}
-          onClose={() => setSuccessModalVisible(false)}
-          iconName="correct"
-          iconColor="#22C55E"
-          autoCloseDelay={2000}
+      {modalConfig && (
+        <CustomModal
+          isVisible={!!modalConfig}
+          onClose={() => setModalConfig(null)}
+          {...modalConfig}
+          onPrimaryButtonPress={
+            modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+          }
+           onSecondaryButtonPress={
+            modalConfig.onSecondaryButtonPress || (() => setModalConfig(null))
+          }
         />
-      </View>
-    )}
+      )}
+      
+      {successModalVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <SuccessModal
+            visible={successModalVisible}
+            message={successMessage}
+            onClose={() => setSuccessModalVisible(false)}
+            iconName="correct"
+            iconColor="#22C55E"
+            autoCloseDelay={2000}
+          />
+        </View>
+      )}
 
       <View style={styles.floatingButton}>
         <GoToAdd />
       </View>
     </ScreenWrapper>
   );
-
 };
 
 export default Home;
@@ -368,7 +388,7 @@ const styles = StyleSheet.create({
   },
   generateContainer: {
     position: 'absolute',
-    top: hp(32),
+    top: '33%',
     right: 15,
     zIndex: 100,
   },

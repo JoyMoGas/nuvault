@@ -1,9 +1,11 @@
 import { theme } from '@/constants/theme';
 import React from 'react';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import {
   AddIcon,
   ArrowDownIcon,
   ArrowLeftIcon,
+  ArrowRightIcon,
   BankIcon,
   BellIcon,
   BillIcon,
@@ -118,18 +120,32 @@ export const icons = {
   secret: secretIcon,
   bell: BellIcon,
   fullEdit: FullEditIcon,
+  arrowRight: ArrowRightIcon,
+  
 } as const;
 
 export type IconName = keyof typeof icons;
 
-interface IconProps extends React.SVGProps<SVGSVGElement> {
+
+interface IconProps { // No necesita extender React.SVGProps para React Native
   name: IconName;
   size?: number;
   color?: string;
+  [key: string]: any; // Para otras props como 'style'
 }
 
 const Icon: React.FC<IconProps> = ({ name, size = 24, color, ...props }) => {
   const IconComponent = icons[name];
+
+  // ✅ VERIFICACIÓN DE SEGURIDAD AÑADIDA
+  if (!IconComponent) {
+    // Si el nombre del ícono no se encuentra, muestra un aviso en la consola
+    // y renderiza un ícono de "pregunta" para que no quede un espacio vacío.
+    console.warn(`[Icon] El ícono con el nombre "${name}" no fue encontrado en tu lista.`);
+    return <FontAwesome name="question-circle" size={size} color="red" {...props} />;
+  }
+
+  // Si se encuentra, lo renderiza normalmente.
   return <IconComponent size={size} color={color || theme.colors.darkGray} {...props} />;
 };
 

@@ -184,6 +184,15 @@ export const ArrowLeftIcon = ({ size = 24, color = "#FFFFFF", ...props }) => (
   />
 );
 
+export const ArrowRightIcon = ({ size = 24, color = "#FFFFFF", ...props }) => (
+  <MaterialIcons 
+    name="keyboard-arrow-right" 
+    size={size} 
+    color={color} 
+    {...props} 
+  />
+);
+
 export const LockIcon = (props) => (
   <Feather name="lock" size={24} color="#808080" {...props} />
 );

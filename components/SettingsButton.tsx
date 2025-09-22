@@ -1,4 +1,3 @@
-// SettingsButton.tsx
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -7,7 +6,6 @@ import {
   Modal,
   Text,
   TouchableWithoutFeedback,
-	Alert,
 } from 'react-native';
 import Icon from '@/assets/icons/icons';
 import { theme } from '@/constants/theme';
@@ -15,47 +13,57 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/authContext';
 import { hp } from '@/helpers/common';
 import { supabase } from '@/lib/supabase';
+import CustomModal from './CustomModal'; // ✅ 1. Importar nuestro modal
 
 const SettingsButton = () => {
   const [menuVisible, setMenuVisible] = useState(false);
+  // ✅ 2. Añadir estado para la configuración del modal
+  const [modalConfig, setModalConfig] = useState<any>(null);
   const router = useRouter();
 
-	const Routes = {
-		SETTINGS: '/settings',
-		HELP: '/help'
-	} as const;
+  const Routes = {
+    SETTINGS: '/settings',
+    HELP: '/help'
+  } as const;
 
-	type RouteKeys = keyof typeof Routes;
+  type RouteKeys = keyof typeof Routes;
 
-	const navigate = (route: RouteKeys) => router.push(Routes[route]);
+  const navigate = (route: RouteKeys) => router.push(Routes[route]);
 
   const { logout } = useAuth();
 
   const handleClose = () => setMenuVisible(false);
 
-		const handleLogout = async () => {
-		// show confirm modal
-		Alert.alert('Confirm', "Are you sure you want to log out?", [
-			{
-				text: 'Cancel',
-				onPress: () => console.log('modal cancelled'),
-				style: 'cancel'
-			},
-			{
-				text: 'Logout',
-				onPress: () => onLogout(),
-				style: 'destructive'
-			}
-		])
-	}
+  // ✅ 3. Refactorizar la lógica de Logout
+  const handleLogout = () => {
+    handleClose(); // Primero, cierra el menú de opciones
+    setModalConfig({
+        iconName: "logOut",
+        iconColor: theme.colors.red,
+        title: "Confirm Logout",
+        description: "Are you sure you want to log out?",
+        primaryButtonTitle: "Logout",
+        onPrimaryButtonPress: executeLogout,
+        primaryButtonColor: theme.colors.red,
+        secondaryButtonTitle: "Cancel",
+    });
+  };
 
-	const onLogout = async () => {
-		//setAuth(null)
-		const {error} = await supabase.auth.signOut();
-		if(error) {
-			Alert.alert('Sign out', "Error signing out!")
-		}
-	}
+  const executeLogout = async () => {
+    setModalConfig(null); // Cierra el modal de confirmación
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      // Si hay un error al cerrar sesión, muestra un modal de error
+      setModalConfig({
+        iconName: "error",
+        iconColor: theme.colors.red,
+        title: "Error",
+        description: "An error occurred while signing out. Please try again.",
+        primaryButtonTitle: "OK",
+      });
+    }
+    // Si el logout es exitoso, el listener de `onAuthStateChange` en tu AuthProvider se encargará de redirigir al usuario.
+  };
 
   return (
     <View>
@@ -80,24 +88,20 @@ const SettingsButton = () => {
                     navigate('SETTINGS')
                   }}
                 >
-									<View style={{ flexDirection: 'row', gap: 10 }}>
-										<Icon name='settings' color={theme.colors.dark} />
-                  	<Text style={styles.menuText}>Settings</Text>
-									</View>
-									
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <Icon name='settings' color={theme.colors.dark} />
+                    <Text style={styles.menuText}>Settings</Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
                   style={styles.menuItem}
-                  onPress={() => {
-                    handleClose();
-                    handleLogout(); // Logout
-                  }}
+                  onPress={handleLogout} // Llama a la nueva función
                 >
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-										<Icon name='logOut' color={theme.colors.dark} />
-                  	<Text style={styles.menuText}>Logout</Text>
-									</View>
+                    <Icon name='logOut' color={theme.colors.dark} />
+                    <Text style={styles.menuText}>Logout</Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -108,15 +112,30 @@ const SettingsButton = () => {
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-										<Icon name='help' color={theme.colors.dark} />
-                  	<Text style={styles.menuText}>Help</Text>
-									</View>
+                    <Icon name='help' color={theme.colors.dark} />
+                    <Text style={styles.menuText}>Help</Text>
+                  </View>
                 </Pressable>
               </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* ✅ 4. Renderizar nuestro modal dinámico */}
+      {modalConfig && (
+        <CustomModal
+            isVisible={!!modalConfig}
+            onClose={() => setModalConfig(null)}
+            {...modalConfig}
+            onPrimaryButtonPress={
+                modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+            }
+            onSecondaryButtonPress={
+                modalConfig.onSecondaryButtonPress || (() => setModalConfig(null))
+            }
+        />
+      )}
     </View>
   );
 };
@@ -129,12 +148,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
-    paddingTop: 60, // espacio desde el top para que aparezca debajo del botón
+    paddingTop: 60,
     paddingRight: 20,
   },
   menu: {
-		alignContent: 'center',
-		alignItems: 'flex-start',
+    alignContent: 'center',
+    alignItems: 'flex-start',
     backgroundColor: theme.colors.primary,
     borderRadius: 12,
     padding: hp(0.6),
@@ -151,6 +170,6 @@ const styles = StyleSheet.create({
   menuText: {
     fontSize: 16,
     color: theme.colors.dark,
-		fontWeight: theme.fonts.bold,
+    fontWeight: theme.fonts.bold,
   },
 });

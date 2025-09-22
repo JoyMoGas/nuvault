@@ -2,7 +2,6 @@ import {
   StyleSheet,
   Text,
   View,
-  Alert,
   ScrollView,
   Switch,
   Modal,
@@ -29,20 +28,20 @@ import { getCategories } from "@/services/categoriesService";
 import { fetchVaultById, updateVaultEntry } from "@/services/vaultsService";
 import { EncryptionService } from "@/services/encryptionService";
 import SuccessModal from "@/components/SuccessModal";
+import CustomModal from "@/components/CustomModal";
 
 interface Category {
   id: string;
   name: string;
 }
 
-// 🔹 CORRECCIÓN: Interfaz Vault consistente con PasswordCard
 interface Vault {
   id: string;
-  category_id: string; // Cambié a string para consistencia
+  category_id: string;
   service_name: string;
   service_username: string;
-  encrypted_password?: string; // Opcional para el caso encriptado
-  password?: string; // Opcional para el caso desencriptado
+  encrypted_password?: string;
+  password?: string;
   is_favorite?: boolean;
   strength?: StrengthLevel;
   strength_score?: number;
@@ -58,6 +57,7 @@ const EditPassword = () => {
   const router = useRouter();
   const { vaultId } = useLocalSearchParams();
 
+  const [modalConfig, setModalConfig] = useState<any>(null);
   const [vaultEntry, setVaultEntry] = useState<Vault | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -75,14 +75,17 @@ const EditPassword = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordModified, setIsPasswordModified] = useState(false);
-	const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      // 🔹 CORRECCIÓN: Validación de vaultId
       if (!vaultId || typeof vaultId !== 'string') {
-        Alert.alert("Error", "ID de vault inválido");
-        router.push("/home");
+        setModalConfig({
+          title: "Error",
+          description: "Invalid vault ID.",
+          primaryButtonTitle: "Go Home",
+          onPrimaryButtonPress: () => router.push("/home"),
+        });
         return;
       }
 
@@ -96,24 +99,26 @@ const EditPassword = () => {
           getCategories(),
         ]);
 
-        // 🔹 CORRECCIÓN: Manejo mejorado de la respuesta del vault
         if (vaultRes.success && vaultRes.data) {
           const entry = vaultRes.data;
           setVaultEntry(entry);
           setServiceName(entry.service_name || "");
           setUsername(entry.service_username || "");
           
-          // 🔹 CORRECCIÓN: Manejo de contraseña encriptada
           let decryptedPassword = "";
           try {
             if (entry.encrypted_password) {
               decryptedPassword = EncryptionService.decryptPassword(entry.encrypted_password);
             } else if (entry.password) {
-              decryptedPassword = entry.password; // Ya desencriptada
+              decryptedPassword = entry.password;
             }
           } catch (decryptError) {
-            console.error("Error al desencriptar contraseña:", decryptError);
-            Alert.alert("Error", "No se pudo desencriptar la contraseña");
+            console.error("Error decrypting password:", decryptError);
+            setModalConfig({
+              title: "Error",
+              description: "Could not decrypt the password.",
+              primaryButtonTitle: "OK",
+            });
           }
           setPassword(decryptedPassword);
           setSelectedCategory(entry.category_id?.toString() || "");
@@ -124,11 +129,14 @@ const EditPassword = () => {
           }
         } else {
           console.error("Failed to fetch vault entry:", vaultRes.msg);
-          Alert.alert("Error", vaultRes.msg || "Failed to load entry data.");
-          router.push("/home");
+          setModalConfig({
+            title: "Error",
+            description: vaultRes.msg || "Failed to load entry data.",
+            primaryButtonTitle: "Go Home",
+            onPrimaryButtonPress: () => router.push("/home"),
+          });
         }
 
-        // Cargar categorías
         if (categoriesRes.success && categoriesRes.data) {
           setCategories(categoriesRes.data);
         } else {
@@ -137,8 +145,12 @@ const EditPassword = () => {
         }
       } catch (error) {
         console.error("Error loading data:", error);
-        Alert.alert("Error", "Error inesperado al cargar los datos");
-        router.push("/home");
+        setModalConfig({
+          title: "Error",
+          description: "An unexpected error occurred while loading the data.",
+          primaryButtonTitle: "Go Home",
+          onPrimaryButtonPress: () => router.push("/home"),
+        });
       } finally {
         setLoading(false);
       }
@@ -164,33 +176,32 @@ const EditPassword = () => {
 
   const handleUpdatePassword = async () => {
     if (!serviceName || !username || !password || !selectedCategory) {
-      Alert.alert("Error", "Please fill all fields!");
+      setModalConfig({ title: "Error", description: "Please fill all fields!" });
       return;
     }
     
     if (!vaultEntry) {
-      Alert.alert("Error", "No vault entry data available");
+      setModalConfig({ title: "Error", description: "No vault entry data available." });
       return;
     }
 
     setSaving(true);
     try {
       if (!EncryptionService.isMasterKeySet()) {
-        Alert.alert(
-          "Security Setup Required",
-          "Please set up your master password first.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Setup", onPress: () => router.push("/security-setup") },
-          ],
-        );
+        setModalConfig({
+          title: "Security Setup Required",
+          description: "Please set up your master password first.",
+          primaryButtonTitle: "Setup",
+          onPrimaryButtonPress: () => { setModalConfig(null); router.push("/security-setup"); },
+          secondaryButtonTitle: "Cancel",
+          onSecondaryButtonPress: () => setModalConfig(null),
+        });
         setSaving(false);
         return;
       }
 
       const strengthResult = calculatePasswordStrength(password);
       
-      // 🔹 CORRECCIÓN: Preparar datos para actualización
       const updates: any = {
         category_id: selectedCategory,
         service_name: serviceName,
@@ -200,7 +211,6 @@ const EditPassword = () => {
         is_favorite: favorite,
       };
 
-      // Solo actualizar la contraseña si fue modificada
       if (isPasswordModified) {
         updates.password = password;
       }
@@ -212,12 +222,12 @@ const EditPassword = () => {
       if (result.success) {
         setShowSuccessModal(true);
       } else {
-        Alert.alert("Error", result.msg || "Failed to update password");
+        setModalConfig({ title: "Error", description: result.msg || "Failed to update password." });
       }
     } catch (error) {
       setSaving(false);
       console.error("Error updating password:", error);
-      Alert.alert("Error", "An unexpected error occurred");
+      setModalConfig({ title: "Error", description: "An unexpected error occurred." });
     }
   };
 
@@ -230,13 +240,13 @@ const EditPassword = () => {
       <ScreenWrapper bg="#f8f8f8">
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Cargando registro...</Text>
+          <Text style={styles.loadingText}>Loading entry...</Text>
         </View>
       </ScreenWrapper>
     );
   }
 
-	const handleSuccessModalClose = () => {
+  const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
     router.push("/home");
   };
@@ -268,7 +278,6 @@ const EditPassword = () => {
           <Icon name="arrowDown" size={20} color="grey" />
         </TouchableOpacity>
 
-        {/* Modal para seleccionar categoría */}
         <Modal
           visible={isCategoryPickerVisible}
           transparent={true}
@@ -392,7 +401,7 @@ const EditPassword = () => {
         />
       </ScrollView>
 
-			<SuccessModal
+      <SuccessModal
         visible={showSuccessModal}
         message="Password edited successfully!"
         onClose={handleSuccessModalClose}
@@ -400,6 +409,25 @@ const EditPassword = () => {
         iconColor="#22C55E"
         autoCloseDelay={2500}
       />
+
+      {modalConfig && (
+        <CustomModal
+          isVisible={!!modalConfig}
+          onClose={() => setModalConfig(null)}
+          title={modalConfig.title}
+          description={modalConfig.description}
+          iconName={modalConfig.iconName || "error"}
+          iconColor={modalConfig.iconColor || theme.colors.red}
+          primaryButtonTitle={modalConfig.primaryButtonTitle || "OK"}
+          onPrimaryButtonPress={
+            modalConfig.onPrimaryButtonPress || (() => setModalConfig(null))
+          }
+          secondaryButtonTitle={modalConfig.secondaryButtonTitle}
+          onSecondaryButtonPress={
+            modalConfig.onSecondaryButtonPress || (() => setModalConfig(null))
+          }
+        />
+      )}
     </ScreenWrapper>
   );
 };
@@ -515,7 +543,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: hp(2.2),
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -558,5 +585,4 @@ const styles = StyleSheet.create({
     fontSize: hp(2),
     color: theme.colors.darkGray,
   },
-	
 });

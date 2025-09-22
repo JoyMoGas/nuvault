@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Switch, TouchableOpacity } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { hp, wp } from '@/helpers/common';
 import { theme } from '@/constants/theme';
