@@ -7,17 +7,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { useDeepLinkHandler } from '@/hooks/useDeepLinkHandler';
 
-// Este componente "guardia" se asegura de que nuestros hooks siempre estén activos
 function AuthStateGuard() {
-  useDeepLinkHandler(); // Maneja los enlaces de recuperación de contraseña
-  useProtectedRoute();  // Maneja el estado de sesión y las redirecciones
+  useDeepLinkHandler();
+  useProtectedRoute();
   
-  console.log('[Layout] AuthStateGuard está activo.');
   
-  return null; // No renderiza nada
+  return null;
 }
 
-// La estructura de navegación de tu app
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -31,7 +28,6 @@ function RootLayoutNav() {
   );
 }
 
-// El layout raíz que envuelve toda la aplicación
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.container}>

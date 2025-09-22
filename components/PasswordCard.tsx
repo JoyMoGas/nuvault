@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
-// El resto de tu código, como categoryIconsById y getIconByCategory, se queda igual.
 const categoryIconsById: Record<number, IconName> = {
   1: 'email', 2: 'socialMedia', 3: 'shopping', 4: 'bank', 5: 'media', 
   6: 'gaming', 7: 'work', 8: 'cloud', 9: 'education', 10: 'health', 
@@ -30,45 +29,39 @@ interface Vault {
   is_favorite?: boolean;
 }
 
-// ✅ 1. CAMBIAMOS LA PROP 'onDeleted' POR 'onDeletePress'
 interface PasswordCardProps {
   vault: Vault;
-  onFavoriteChanged?: (id: string, newValue: boolean) => void;
+  onFavoriteChanged: (id: string, newValue: boolean) => void;
   onDeletePress: (vault: Vault) => void;
   onShowSuccess: (message: string) => void;
 }
 
-// ✅ 2. ACTUALIZAMOS LAS PROPS QUE RECIBE EL COMPONENTE
 const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, onDeletePress, onShowSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(vault.is_favorite || false);
   const router = useRouter();
 
-  // Función de favoritos (sin cambios)
+  // Se elimina el estado local 'isFavorite' para evitar conflictos de renderizado.
+  // La única fuente de verdad es la prop 'vault'.
+
   const handleToggleFavorite = async () => {
-    const newValue = !isFavorite;
-    setIsFavorite(newValue);
+    const newValue = !vault.is_favorite;
+    onFavoriteChanged(vault.id, newValue); // Actualización optimista en la UI
+
     const { error } = await supabase
       .from('vault_entries')
       .update({ is_favorite: newValue })
       .eq('id', vault.id);
     if (error) {
       console.error('Error al actualizar favorito:', error.message);
-      setIsFavorite(!newValue); // Revertir si hay error
-      return;
-    }
-    if (onFavoriteChanged) {
-      onFavoriteChanged(vault.id, newValue);
+      onFavoriteChanged(vault.id, !newValue); // Revertir si hay error
     }
   };
 
-  // Función de copiar (sin cambios)
   const handleCopyPassword = async () => {
     await Clipboard.setStringAsync(vault.encrypted_password);
     onShowSuccess("Password copied to clipboard!");
   };
 
-  // Función de editar (sin cambios)
   const handleEdit = () => {
     router.push({
       pathname: '/editPassword',
@@ -76,9 +69,6 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
     });
   };
 
-  // ✅ 3. REEMPLAZAMOS COMPLETAMENTE LA FUNCIÓN 'handleDelete'
-  // Ahora, esta función no contiene lógica de borrado ni alertas.
-  // Simplemente notifica al componente padre (Home) que el usuario quiere borrar.
   const handleDelete = () => {
     onDeletePress(vault);
   };
@@ -94,8 +84,8 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
             <Icon name="edit" size={24} color={theme.colors.light} />
           </Pressable>
           <Pressable
-            onPress={handleDelete} // La UI llama a la nueva función
-            style={[{ backgroundColor: theme.colors.red }, styles.actionButton]} // Color cambiado para ser más intuitivo
+            onPress={handleDelete}
+            style={[{ backgroundColor: theme.colors.red }, styles.actionButton]}
           >
             <Icon name="delete" size={24} color={theme.colors.light} />
           </Pressable>
@@ -112,19 +102,23 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
           <Text style={styles.infoName}>{vault.service_username}</Text>
 
           <View style={styles.infoPassContainer}>
+            {/* ✅ CAMBIO: El estilo ahora es dinámico */}
             <Text
-              style={{
-                color: '#808080',
-                flexShrink: 1,
-                fontWeight: 'bold',
-                fontSize: 20,
-              }}
+              style={[
+                styles.passwordTextBase,
+                { fontSize: showPassword ? 16 : 20 } // Tamaño de fuente dinámico
+              ]}
             >
-              {showPassword ? vault.encrypted_password : '*******'}
+              {showPassword ? vault.encrypted_password : '●●●●●●●●'}
             </Text>
 
+            {/* ✅ CAMBIO: El texto "View/Hide" es ahora un icono */}
             <Pressable onPress={() => setShowPassword(!showPassword)}>
-              <Text>{showPassword ? 'Hide' : 'View'}</Text>
+              <Icon 
+                name={showPassword ? 'hide' : 'show'} 
+                size={24} 
+                color={theme.colors.darkGray} 
+              />
             </Pressable>
           </View>
         </View>
@@ -138,7 +132,7 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
             <Icon
               name="favorite"
               size={31}
-              color={isFavorite ? theme.colors.red : '#808080'}
+              color={vault.is_favorite ? theme.colors.red : '#808080'}
             />
           </TouchableOpacity>
         </View>
@@ -149,7 +143,6 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
 
 export default PasswordCard;
 
-// ESTILOS (SIN CAMBIOS)
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
@@ -188,9 +181,13 @@ const styles = StyleSheet.create({
   infoPassContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    fontSize: theme.size.medium,
-    color: theme.colors.darkGray,
     gap: 10,
+  },
+  // ✅ NUEVO ESTILO: Estilo base para el texto de la contraseña
+  passwordTextBase: {
+    color: '#808080',
+    flexShrink: 1,
+    fontWeight: 'bold',
   },
   iconsContainer: {
     marginLeft: 3,

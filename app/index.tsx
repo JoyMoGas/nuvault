@@ -1,11 +1,11 @@
 import React from "react";
 import { View } from "react-native"
-import Loading from '../components/Loading'
+import FirstLoading from "@/components/FirstLoading";
 
 const Index = () => {
 	return (
 		<View style={{flex: 1, alignItems: 'center', justifyContent: 'center'}}>
-			<Loading />
+			<FirstLoading />
 		</View>
 	)
 }
