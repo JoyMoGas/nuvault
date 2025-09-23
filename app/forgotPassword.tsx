@@ -33,7 +33,7 @@ const ForgotPassword = () => {
 
     setLoading(true);
     
-    const redirectUrl = Linking.createURL('resetPassword'); 
+    const redirectUrl = 'https://nuvaultapp.netlify.app/resetPassword'; 
     
     const { error } = await supabase.auth.resetPasswordForEmail(emailRef.current, {
         redirectTo: redirectUrl,

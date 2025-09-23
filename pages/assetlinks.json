@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.nuvaultapp.nuvault",
+      "sha256_cert_fingerprints": ["10:6A:F1:7F:8A:AF:98:06:B4:03:51:B2:23:A9:99:1F:C7:9F:A5:BD:A5:6F:2E:07:0A:BB:A1:21:DA:D5:71:8A"]
+    }
+  }
+]

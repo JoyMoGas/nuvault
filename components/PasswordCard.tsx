@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import React, { useState } from 'react';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { theme } from '@/constants/theme';
@@ -7,6 +7,7 @@ import Icon, { IconName } from '@/assets/icons/icons';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { EncryptionService } from '@/services/encryptionService'; // ✅ 1. Importar el servicio de encriptación
 
 const categoryIconsById: Record<number, IconName> = {
   1: 'email', 2: 'socialMedia', 3: 'shopping', 4: 'bank', 5: 'media', 
@@ -40,26 +41,60 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  // Se elimina el estado local 'isFavorite' para evitar conflictos de renderizado.
-  // La única fuente de verdad es la prop 'vault'.
+  // ✅ 2. Añadir estados para la contraseña desencriptada y el estado de carga
+  const [decryptedPassword, setDecryptedPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ 3. Crear una función para desencriptar la contraseña solo cuando sea necesario
+  const getAndSetDecryptedPassword = async () => {
+    // Si ya la tenemos, la devolvemos para no desencriptar de nuevo
+    if (decryptedPassword) return decryptedPassword;
+
+    setIsLoading(true);
+    try {
+      // Asegúrate de que tu EncryptionService tiene la Master Key cargada al iniciar sesión
+      const plainText = EncryptionService.decryptPassword(vault.encrypted_password);
+      setDecryptedPassword(plainText);
+      return plainText;
+    } catch (error) {
+      console.error("Falló la desencriptación:", error);
+      // Opcional: mostrar un modal de error aquí
+      return "Error";
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleToggleFavorite = async () => {
     const newValue = !vault.is_favorite;
-    onFavoriteChanged(vault.id, newValue); // Actualización optimista en la UI
-
+    onFavoriteChanged(vault.id, newValue);
     const { error } = await supabase
       .from('vault_entries')
       .update({ is_favorite: newValue })
       .eq('id', vault.id);
     if (error) {
       console.error('Error al actualizar favorito:', error.message);
-      onFavoriteChanged(vault.id, !newValue); // Revertir si hay error
+      onFavoriteChanged(vault.id, !newValue);
     }
   };
 
+  // ✅ 4. Actualizar la función de copiar para que use la contraseña desencriptada
   const handleCopyPassword = async () => {
-    await Clipboard.setStringAsync(vault.encrypted_password);
-    onShowSuccess("Password copied to clipboard!");
+    const plainText = await getAndSetDecryptedPassword();
+    if (plainText !== "Error") {
+      await Clipboard.setStringAsync(plainText);
+      onShowSuccess("Password copied to clipboard!");
+    }
+  };
+
+  // ✅ 5. Actualizar la función para mostrar/ocultar la contraseña
+  const handleToggleVisibility = async () => {
+    // Si vamos a mostrar la contraseña por primera vez, la desencriptamos
+    if (!showPassword && !decryptedPassword) {
+      await getAndSetDecryptedPassword();
+    }
+    // Luego, simplemente cambiamos la visibilidad
+    setShowPassword(!showPassword);
   };
 
   const handleEdit = () => {
@@ -77,16 +112,10 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
     <Swipeable
       renderRightActions={() => (
         <View style={styles.buttonContainer}>
-          <Pressable
-            onPress={handleEdit}
-            style={[{ backgroundColor: '#808080' }, styles.actionButton]}
-          >
+          <Pressable onPress={handleEdit} style={[{ backgroundColor: '#808080' }, styles.actionButton]}>
             <Icon name="edit" size={24} color={theme.colors.light} />
           </Pressable>
-          <Pressable
-            onPress={handleDelete}
-            style={[{ backgroundColor: theme.colors.red }, styles.actionButton]}
-          >
+          <Pressable onPress={handleDelete} style={[{ backgroundColor: theme.colors.red }, styles.actionButton]}>
             <Icon name="delete" size={24} color={theme.colors.light} />
           </Pressable>
         </View>
@@ -96,29 +125,20 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
         <View style={styles.iconContainer}>
           {getIconByCategory(vault.category_id)}
         </View>
-
         <View style={styles.infoContainer}>
           <Text style={styles.infoTitle}>{vault.service_name}</Text>
           <Text style={styles.infoName}>{vault.service_username}</Text>
-
           <View style={styles.infoPassContainer}>
-            {/* ✅ CAMBIO: El estilo ahora es dinámico */}
-            <Text
-              style={[
-                styles.passwordTextBase,
-                { fontSize: showPassword ? 16 : 20 } // Tamaño de fuente dinámico
-              ]}
-            >
-              {showPassword ? vault.encrypted_password : '●●●●●●●●'}
-            </Text>
-
-            {/* ✅ CAMBIO: El texto "View/Hide" es ahora un icono */}
-            <Pressable onPress={() => setShowPassword(!showPassword)}>
-              <Icon 
-                name={showPassword ? 'hide' : 'show'} 
-                size={24} 
-                color={theme.colors.darkGray} 
-              />
+            {/* ✅ 6. Mostrar el estado de carga o la contraseña correcta */}
+            {isLoading ? (
+                <ActivityIndicator color={theme.colors.darkGray} />
+            ) : (
+                <Text style={[styles.passwordTextBase, { fontSize: showPassword ? 16 : 20 }]}>
+                    {showPassword ? decryptedPassword : '●●●●●●●●'}
+                </Text>
+            )}
+            <Pressable onPress={handleToggleVisibility}>
+              <Icon name={showPassword ? 'hide' : 'show'} size={24} color={theme.colors.darkGray} />
             </Pressable>
           </View>
         </View>
@@ -127,7 +147,6 @@ const PasswordCard: React.FC<PasswordCardProps> = ({ vault, onFavoriteChanged, o
           <Pressable onPress={handleCopyPassword}>
             <Icon name="copy" size={31} />
           </Pressable>
-
           <TouchableOpacity onPress={handleToggleFavorite}>
             <Icon
               name="favorite"
@@ -182,8 +201,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    minHeight: 28, // Altura mínima para evitar saltos al cargar
   },
-  // ✅ NUEVO ESTILO: Estilo base para el texto de la contraseña
   passwordTextBase: {
     color: '#808080',
     flexShrink: 1,

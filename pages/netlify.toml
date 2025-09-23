@@ -1,4 +1,9 @@
-# Redireccionamientos específicos para cada tipo de acción
+[[redirects]]
+  from = "/.well-known/assetlinks.json"
+  to = "/assetlinks.json"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/reset-password"
   to = "/reset-password.html"
@@ -9,7 +14,6 @@
   to = "/email-validation.html"
   status = 200
 
-# Fallback para otras rutas (opcional)
 [[redirects]]
   from = "/*"
   to = "/index.html"

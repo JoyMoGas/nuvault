@@ -1,32 +1,41 @@
 {
   "expo": {
     "name": "Nuvault",
-    "slug": "Nuvault",
+    "slug": "nuvault",
+    "owner": "joymogas",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "nuvault",
     "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nuvaultapp.nuvault",
+      "buildNumber": "1",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "nuvault",
-            "CFBundleURLSchemes": ["nuvault"]
+            "CFBundleURLSchemes": [
+              "nuvault"
+            ]
           }
         ]
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#95A5A6"
       },
       "package": "com.nuvaultapp.nuvault",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
+      "permissions": [],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -36,7 +45,10 @@
               "scheme": "nuvault"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
@@ -47,29 +59,38 @@
               "host": "nuvaultapp.netlify.app"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#95A5A6"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0feba2f8-6ad7-4581-a6be-069852dae5b4"
+      }
     }
   }
 }
