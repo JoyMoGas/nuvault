@@ -33,7 +33,6 @@
         "backgroundColor": "#95A5A6"
       },
       "package": "com.nuvaultapp.nuvault",
-      "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "permissions": [],
       "intentFilters": [

@@ -11,7 +11,8 @@ import { theme } from '../constants/theme';
 import { hp, wp } from '../helpers/common';
 import { supabase } from '../lib/supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
-import CustomModal from '../components/CustomModal'; // ✅ 1. Importar CustomModal
+import CustomModal from '../components/CustomModal';
+import * as Linking from 'expo-linking'; // ✅ 1. Importar Linking
 
 const SignUp = () => {
   const router = useRouter();
@@ -21,14 +22,11 @@ const SignUp = () => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({ username: '', email: '', password: '', general: '' });
-  
-  // ✅ 2. Añadir estado para la configuración del modal
   const [modalConfig, setModalConfig] = useState<any>(null);
 
-  // ✅ 3. Crear una función para manejar la acción del modal de éxito
   const handleSuccess = () => {
-    setModalConfig(null); // Ocultar el modal
-    router.push('/login'); // Navegar a la pantalla de login
+    setModalConfig(null);
+    router.push('/login');
   };
 
   const onSubmit = async () => {
@@ -45,11 +43,18 @@ const SignUp = () => {
 
     setLoading(true);
 
+    // ✅ 2. Crear la URL de redirección dinámica
+    const redirectUrl = __DEV__
+      ? Linking.createURL('email-validation') // Para desarrollo (exp://...)
+      : 'https://nuvaultapp.netlify.app/email-validation'; // Para producción
+
+    // ✅ 3. Enviar la URL a la Edge Function
     const { data, error } = await supabase.functions.invoke('sign-up', {
       body: { 
         email: email.trim(), 
         password: password.trim(), 
-        username: username.trim() 
+        username: username.trim(),
+        redirectTo: redirectUrl // <-- Se envía la URL correcta
       },
     });
 
@@ -57,26 +62,23 @@ const SignUp = () => {
 
     if (error) {
       let errorMessage = "An unexpected error occurred.";
-
       if (error instanceof FunctionsHttpError) {
         try {
           const errorData = await error.context.json();
           errorMessage = errorData.error;
-        } catch (e) {
-          errorMessage = error.message;
-        }
+        } catch (e) { errorMessage = error.message; }
       } else {
         errorMessage = error.message;
       }
       
       if (errorMessage.includes('User already registered')) {
-          setErrors(prev => ({...prev, email: 'A user with this email is already registered.'}));
+        setErrors(prev => ({...prev, email: 'A user with this email is already registered.'}));
       } else if (errorMessage.includes('username is already in use')) {
-          setErrors(prev => ({...prev, username: 'That username is already in use.'}));
+        setErrors(prev => ({...prev, username: 'That username is already in use.'}));
       } else if (errorMessage.includes('Password should be at least 6 characters')) {
-          setErrors(prev => ({...prev, password: errorMessage}));
+        setErrors(prev => ({...prev, password: errorMessage}));
       } else {
-          setErrors(prev => ({...prev, general: errorMessage}));
+        setErrors(prev => ({...prev, general: errorMessage}));
       }
       return;
     }
@@ -163,8 +165,6 @@ const SignUp = () => {
           </View>
         </View>
       </View>
-
-      {/* ✅ 5. Renderizar nuestro modal dinámico */}
       {modalConfig && (
         <CustomModal
             isVisible={!!modalConfig}
